@@ -9,5 +9,6 @@ import (
 func main() {
 	global.Config = core.InitConfig()
 	global.DB = initialize.InitGorm()
+	global.Log = core.InitLogger()
 	core.RunServer()
 }

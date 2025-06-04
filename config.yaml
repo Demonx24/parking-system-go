@@ -17,3 +17,10 @@ system:
   use_multipoint: true
   sessions_secret: "5ZOH5ZOH5ZOH5ZOH5ZOH5ZOH5ZOH5ZOH"
   oss_type: local
+zap:
+  level: info
+  filename: log/go_blog.log
+  max_size: 200
+  max_backups: 30
+  max_age: 5
+  is_console_print: true

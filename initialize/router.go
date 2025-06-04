@@ -6,6 +6,7 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"parking-system-go/global"
+	"parking-system-go/router"
 	"time"
 )
 
@@ -29,14 +30,11 @@ func InitRouter() *gin.Engine {
 	//Router.StaticFS(global.Config.Upload.Path, http.Dir(global.Config.Upload.Path))
 	// 创建路由组
 
-	//routerGroup := router.RouterGroupApp
-	//
-	//publicGroup := Router.Group(global.Config.System.RouterPrefix)
-	//
-	//routerGroup.InitBlogRouter(publicGroup)
-	//routerGroup.InitTagRouter(publicGroup)
-	//routerGroup.InitLinkRouter(publicGroup)
-	//routerGroup.InitClassifyRouter(publicGroup)
+	routerGroup := router.RouterGroupApp
+
+	publicGroup := Router.Group(global.Config.System.RouterPrefix)
+
+	routerGroup.InitParkingRouter(publicGroup)
 
 	return Router
 }
