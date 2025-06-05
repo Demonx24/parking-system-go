@@ -12,5 +12,7 @@ func (p *ParkingRouter) InitParkingRouter(Router *gin.RouterGroup) {
 	parkingApi := api.ApiGroupApp.ParkingApi
 	{
 		parkingRouter.GET("status", parkingApi.GetParkingStatus)
+		parkingRouter.POST("entry", parkingApi.Entry)
+		parkingRouter.POST("exit", parkingApi.Exit)
 	}
 }

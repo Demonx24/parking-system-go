@@ -33,8 +33,9 @@ func InitRouter() *gin.Engine {
 	routerGroup := router.RouterGroupApp
 
 	publicGroup := Router.Group(global.Config.System.RouterPrefix)
-
+	routerGroup.InitUserRouter(publicGroup)
 	routerGroup.InitParkingRouter(publicGroup)
+	routerGroup.InitBarrierLogRouter(publicGroup)
 
 	return Router
 }

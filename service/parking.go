@@ -9,23 +9,28 @@ import (
 
 type ParkingService struct{}
 
-func (parkingService *ParkingService) ParkingStatus(req database.ParkingRecord) (database.ParkingRecord, error) {
+func (s *ParkingService) ParkingStatus(req database.ParkingRecord) (database.ParkingRecord, error) {
 	var record database.ParkingRecord
-	db := global.DB
-	switch {
-	case req.ID != 0:
-		db = db.Where("id = ?", req.ID)
-	case req.CarPlate != "":
-		db = db.Where("car_plate = ?", req.CarPlate)
-	default:
-		return database.ParkingRecord{}, errors.New("必须提供 Id,车牌号")
+
+	if req.ID == 0 && req.CarPlate == "" {
+		return record, errors.New("必须提供 ID 或车牌号")
 	}
-	err := db.First(&record).Error
+
+	query := global.DB.Model(&database.ParkingRecord{})
+	if req.ID != 0 {
+		query = query.Where("id = ?", req.ID)
+	} else {
+		query = query.Where("car_plate = ?", req.CarPlate)
+	}
+
+	err := query.First(&record).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return database.ParkingRecord{}, err
+		return record, err
 	}
+
 	return record, nil
 }
+
 func (parkingService *ParkingService) GetParkingLots(req database.ParkingLot) (database.ParkingLot, error) {
 	var lot database.ParkingLot
 	db := global.DB

@@ -19,8 +19,8 @@ system:
   oss_type: local
 zap:
   level: info
-  filename: log/go_blog.log
-  max_size: 200
-  max_backups: 30
-  max_age: 5
+  filename: log/parking.log
+  max_size: 30
+  max_backups: 7
+  max_age: 1
   is_console_print: true
