@@ -18,7 +18,7 @@ type ParkingRecord struct { //停车记录表
 	ID           uint64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	UserID       uint64     `gorm:"not null" json:"user_id"`
 	ParkingLotID uint64     `gorm:"not null" json:"parking_lot_id"`
-	CarPlate     string     `gorm:"size:16" json:"car_plate"`
+	PlateNumber  string     `gorm:"type:varchar(20);not null" json:"plate_number"`
 	EntryTime    time.Time  `gorm:"not null" json:"entry_time"`
 	ExitTime     *time.Time `json:"exit_time"`
 	TotalFee     float64    `gorm:"type:decimal(10,2);default:0" json:"total_fee"`

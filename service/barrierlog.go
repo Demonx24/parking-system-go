@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"go.uber.org/zap"
+	"gorm.io/gorm"
 	"parking-system-go/global"
 	"parking-system-go/model/database"
 )
@@ -66,4 +67,40 @@ func (s *BarrierLogService) ListAll() ([]database.BarrierLog, error) {
 		return nil, err
 	}
 	return logs, nil
+}
+
+// 判断某车牌是否在场内（最后一次 entry > exit 则说明在场）
+func (s *BarrierLogService) IsCarInParking(plateNumber string) (bool, error) {
+	var lastEntry, lastExit database.BarrierLog
+
+	// 获取最后一次 entry
+	err := global.DB.
+		Where("plate_number = ? AND lane_type = ?", plateNumber, "entry").
+		Order("timestamp DESC").
+		First(&lastEntry).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+
+	// 获取最后一次 exit
+	err = global.DB.
+		Where("plate_number = ? AND lane_type = ?", plateNumber, "exit").
+		Order("timestamp DESC").
+		First(&lastExit).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, err
+	}
+
+	// 如果没有 entry，肯定不在场
+	if lastEntry.ID == 0 {
+		return false, nil
+	}
+
+	// 没有 exit，说明还没出场
+	if lastExit.ID == 0 {
+		return true, nil
+	}
+
+	// 比较时间
+	return lastEntry.Timestamp.After(lastExit.Timestamp), nil
 }

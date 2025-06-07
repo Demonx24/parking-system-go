@@ -14,5 +14,7 @@ func (p *ParkingRouter) InitParkingRouter(Router *gin.RouterGroup) {
 		parkingRouter.GET("status", parkingApi.GetParkingStatus)
 		parkingRouter.POST("entry", parkingApi.Entry)
 		parkingRouter.POST("exit", parkingApi.Exit)
+		//parkingRouter.POST("create_payment", parkingApi.CreatePayment)
+		//parkingRouter.POST("payment_notify", parkingApi.PaymentNotify)
 	}
 }

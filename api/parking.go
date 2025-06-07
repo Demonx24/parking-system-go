@@ -7,12 +7,12 @@ import (
 	"parking-system-go/global"
 	"parking-system-go/model/database"
 	"parking-system-go/model/response"
+	"parking-system-go/utils"
 	"time"
 )
 
-type ParkingApi struct{}
-
-// 入场信息等级
+type ParkingApi struct{} // //////////////////////////////////////////////////////////////////////////
+// 入场信息
 func (p *ParkingApi) Entry(c *gin.Context) {
 	//前端传过来抬杆信息
 	var req database.BarrierLog
@@ -21,6 +21,17 @@ func (p *ParkingApi) Entry(c *gin.Context) {
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
+	inParking, err := barrierLogService.IsCarInParking("粤B12345")
+	if err != nil {
+		response.FailWithMessage("判断车辆是否在场失败", c)
+		return
+	}
+	if inParking {
+		response.OkWithMessage("车辆在停车场内", c)
+		return
+	}
+
+	req.LaneType = "entry"
 	//将抬杆信息保存
 	barrierLog, err := barrierLogService.Create(req)
 	if err != nil {
@@ -33,11 +44,12 @@ func (p *ParkingApi) Entry(c *gin.Context) {
 	if err := parkinglotService.DecrementAvailableSlotsWithPessimisticLock(*barrierLog.ParkingID); err != nil {
 		global.Log.Error("修改当前停车场剩余车位失败", zap.Error(err))
 		response.FailWithMessage(err.Error(), c)
+		return
 	}
 
 	parkingRecord := database.ParkingRecord{
 		ParkingLotID: *barrierLog.ParkingID,
-		CarPlate:     barrierLog.PlateNumber,
+		PlateNumber:  barrierLog.PlateNumber,
 		Status:       0,
 		EntryTime:    barrierLog.Timestamp,
 		CreatedAt:    barrierLog.CreatedAt,
@@ -47,9 +59,10 @@ func (p *ParkingApi) Entry(c *gin.Context) {
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
-	response.OkWithData("欢迎"+parkingRecord.CarPlate, c)
+	response.OkWithData("欢迎"+parkingRecord.PlateNumber, c)
 }
 
+// 出场信息
 func (p *ParkingApi) Exit(c *gin.Context) {
 	var req database.BarrierLog
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -57,22 +70,26 @@ func (p *ParkingApi) Exit(c *gin.Context) {
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
-
-	// 保存出场抬杆记录
-	_, err := barrierLogService.Create(req)
-	if err != nil {
-		global.Log.Error("保存出场抬杆记录失败", zap.Error(err))
-		response.FailWithMessage(err.Error(), c)
-		return
-	}
 	parkingRecord := database.ParkingRecord{
-		CarPlate: req.PlateNumber,
+		PlateNumber: req.PlateNumber,
 	}
 	// 查找未出场的停车记录
-	parkingRecord, err = parkingrecordService.GetRecord(parkingRecord)
+	parkingRecord, err := parkingrecordService.GetRecord(parkingRecord)
 	if err != nil {
 		global.Log.Error("未找到在场车辆记录", zap.Error(err))
 		response.FailWithMessage("未找到该车辆在场记录", c)
+		return
+	}
+	if parkingRecord.Status != 0 {
+		response.FailWithMessage("车辆未进入停车场", c)
+		return
+	}
+	// 保存出场抬杆记录
+	req.LaneType = "exit"
+	_, err = barrierLogService.Create(req)
+	if err != nil {
+		global.Log.Error("保存出场抬杆记录失败", zap.Error(err))
+		response.FailWithMessage(err.Error(), c)
 		return
 	}
 
@@ -87,29 +104,30 @@ func (p *ParkingApi) Exit(c *gin.Context) {
 		return
 	}
 	parkingRecord.TotalFee = ps.TotalFee
-
-	//// ==== 模拟支付逻辑（可扩展） ====
-	//if err := paymentService.Pay(parkingRecord); err != nil {
-	//	global.Log.Error("支付失败", zap.Error(err))
-	//	response.FailWithMessage("支付失败", c)
-	//	return
-	//}
-
+	order := database.Order{
+		Amount:          ps.TotalFee,
+		PlateNumber:     parkingRecord.PlateNumber,
+		Status:          0,
+		ParkingRecordID: parkingRecord.ID,
+		UserID:          parkingRecord.UserID,
+		OrderID:         utils.GenerateOrderID(),
+	}
 	// 保存更新的停车记录
 	if err := parkingrecordService.Update(&parkingRecord); err != nil {
 		global.Log.Error("更新出场信息失败", zap.Error(err))
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
-
-	// 增加剩余车位
-	if err := parkinglotService.IncrementAvailableSlotsWithPessimisticLock(parkingRecord.ParkingLotID); err != nil {
-		global.Log.Error("增加停车场剩余车位失败", zap.Error(err))
+	// ==== 模拟支付逻辑（可扩展） ====
+	var wxResp response.UnifiedOrderResponse
+	wxResp.CodeURL, wxResp.PrepayID, err = payWeChatService.CreatePayment(&order, c.ClientIP())
+	if err != nil {
+		global.Log.Error("调用微信统一接口失败", zap.Error(err))
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
+	response.OkWithData(wxResp, c)
 
-	response.OkWithData("再见 "+parkingRecord.CarPlate+"，欢迎下次光临", c)
 }
 
 // 查询停车状态
@@ -122,17 +140,17 @@ func (p *ParkingApi) GetParkingStatus(c *gin.Context) {
 	}
 
 	// 如果前端没有传车牌，则用其他信息查询用户，补充车牌
-	if req.CarPlate == "" {
+	if req.PlateNumber == "" {
 		user, err := userService.GetUser(req)
 		if err != nil {
 			global.Log.Error("查询用户信息数据失败", zap.Error(err))
 			response.FailWithMessage(err.Error(), c)
 			return
 		}
-		req.CarPlate = user.CarPlate
+		req.PlateNumber = user.PlateNumber
 	}
 
-	parking, err := parkingService.ParkingStatus(database.ParkingRecord{CarPlate: req.CarPlate})
+	parking, err := parkingService.ParkingStatus(database.ParkingRecord{PlateNumber: req.PlateNumber})
 	if err != nil {
 		global.Log.Error("查询停车状态失败", zap.Error(err))
 		response.FailWithMessage(err.Error(), c)
@@ -152,7 +170,7 @@ func (p *ParkingApi) GetParkingStatus(c *gin.Context) {
 // 抽离计算停车状态和费用逻辑
 func buildParkingStatus(parking database.ParkingRecord) (response.ParkingStatus, error) {
 	ps := response.ParkingStatus{
-		CarPlate:  parking.CarPlate,
+		CarPlate:  parking.PlateNumber,
 		EntryTime: parking.EntryTime,
 		ExitTime:  parking.ExitTime,
 	}

@@ -14,7 +14,7 @@ func (s *ParkingRecordService) Create(record *database.ParkingRecord) error {
 
 func (s *ParkingRecordService) GetRecord(req database.ParkingRecord) (database.ParkingRecord, error) {
 	var record database.ParkingRecord
-	if req.ID == 0 && req.CarPlate == "" {
+	if req.ID == 0 && req.PlateNumber == "" {
 		return record, errors.New("必须提供 ID 或车牌号")
 	}
 
@@ -22,9 +22,9 @@ func (s *ParkingRecordService) GetRecord(req database.ParkingRecord) (database.P
 	if req.ID != 0 {
 		query = query.Where("id = ?", req.ID)
 	} else {
-		query = query.Where("car_plate = ?", req.CarPlate)
+		query = query.Where("plate_number = ?", req.PlateNumber)
 	}
-
+	query = query.Order("created_at DESC")
 	err := query.First(&record).Error
 	if err != nil {
 		return record, err

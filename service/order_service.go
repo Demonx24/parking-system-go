@@ -14,14 +14,20 @@ func (s *OrderService) Create(order *database.Order) error {
 
 func (s *OrderService) GetOrder(req database.Order) (database.Order, error) {
 	var order database.Order
-	if req.ID == 0 && req.ParkingRecordID == 0 {
-		return order, errors.New("必须提供 ID 或停车记录 ID")
+
+	// 参数检查
+	if req.ID == 0 && req.ParkingRecordID == 0 && req.OrderID == "" {
+		return order, errors.New("必须提供订单编号或停车记录 ID")
 	}
 
 	query := global.DB.Model(&database.Order{})
+
+	// 依优先级判断查询条件
 	if req.ID != 0 {
 		query = query.Where("id = ?", req.ID)
-	} else {
+	} else if req.OrderID != "" {
+		query = query.Where("order_id = ?", req.OrderID)
+	} else if req.ParkingRecordID != 0 {
 		query = query.Where("parking_record_id = ?", req.ParkingRecordID)
 	}
 

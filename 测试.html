@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>微信支付模拟测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        #qrcode { margin: 20px 0; }
+        #status { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<h1>微信支付模拟测试</h1>
+
+<label>
+    订单号：<input type="text" id="orderId" value="ORDER123456" />
+</label>
+<br /><br />
+<label>
+    金额(元)：<input type="number" id="amount" value="0.01" step="0.01" />
+</label>
+<br /><br />
+<button id="btnCreate">创建支付订单</button>
+
+<div id="qrcode"></div>
+<div id="status"></div>
+
+<!-- 模拟扫码支付回调按钮 -->
+<button id="btnCallback" style="display:none;">📡 模拟扫码支付成功（发送回调）</button>
+
+<pre id="callbackResult"></pre>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<script>
+    let pollTimer = null;
+    let gPrepayId = null;
+
+    function md5(str) {
+        return CryptoJS.MD5(str).toString().toUpperCase();
+    }
+
+    function generateSign(params, apiKey) {
+        const keys = Object.keys(params).filter(k => k !== 'sign' && params[k]).sort();
+        const str = keys.map(k => `${k}=${params[k]}`).join('&') + `&key=${apiKey}`;
+        return md5(str);
+    }
+
+    document.getElementById('btnCreate').addEventListener('click', () => {
+        const orderId = document.getElementById('orderId').value.trim();
+        const amount = parseFloat(document.getElementById('amount').value);
+
+        if (!orderId) {
+            alert('请输入订单号');
+            return;
+        }
+        if (isNaN(amount) || amount <= 0) {
+            alert('请输入正确的金额');
+            return;
+        }
+
+        fetch('http://localhost:8081/api/pay/unifiedorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order_id: orderId, amount: amount }),
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 0) {
+                    const codeUrl = data.data.code_url;
+                    const prepayId = data.data.prepay_id;
+                    gPrepayId = prepayId;
+
+                    document.getElementById('qrcode').innerHTML = `
+                        <p>二维码链接（模拟）:</p>
+                        <a href="${codeUrl}" target="_blank">${codeUrl}</a>
+                        <p>预支付交易会话标识: ${prepayId}</p>
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(codeUrl)}" alt="二维码" />
+                    `;
+                    document.getElementById('status').innerText = '等待支付...';
+                    document.getElementById('btnCallback').style.display = 'inline';
+
+                    if (pollTimer) clearInterval(pollTimer);
+                    pollTimer = setInterval(() => {
+                        fetch(`http://localhost:8081/api/pay/order_status?order_id=${orderId}`)
+                            .then(res => res.json())
+                            .then(statusData => {
+                                if (statusData.code === 0 && statusData.data.status === 1) {
+                                    document.getElementById('status').innerHTML = '<span style="color:#209520;">✅ 支付成功！</span>';
+                                    clearInterval(pollTimer);
+                                }
+                            });
+                    }, 3000);
+
+                } else {
+                    alert('创建订单失败: ' + data.msg);
+                }
+            })
+            .catch(err => alert('请求失败: ' + err));
+    });
+
+    document.getElementById('btnCallback').addEventListener('click', () => {
+        const orderId = document.getElementById('orderId').value.trim();
+        fetch(`http://localhost:8081/api/pay/callback?order_id=${orderId}`)
+            .then(res => res.text())
+            .then(text => {
+                document.getElementById("callbackResult").innerText = "模拟回调响应：\n" + text;
+            })
+            .catch(err => {
+                document.getElementById("callbackResult").innerText = "请求失败: " + err;
+            });
+    });
+</script>
+
+</body>
+</html>

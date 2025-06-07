@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>停车场支付模拟演示</title>
+    <style>
+        /* 页面整体风格 */
+        body {
+            background-color: #f0f2f5;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        /* 卡片式区域 */
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            padding: 20px;
+        }
+        .card h2 {
+            margin-top: 0;
+            color: #444;
+        }
+        /* 表单样式 */
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            border-color: #409eff;
+            outline: none;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #409eff;
+            color: #fff;
+            padding: 10px 20px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #66b1ff;
+        }
+        .btn:active {
+            background-color: #3a8ee6;
+        }
+        /* 日志区域 */
+        #log {
+            background-color: #f5f5f5;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            padding: 10px;
+            height: 180px;
+            overflow-y: auto;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            color: #333;
+        }
+        /* 支付二维码展示 */
+        #qrCodeContainer {
+            text-align: center;
+            margin-top: 15px;
+        }
+        #qrCodeContainer img {
+            max-width: 200px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        /* 提示消息样式 */
+        .message {
+            margin-top: 10px;
+            color: #409eff;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>停车场支付模拟演示</h1>
+
+    <!-- 入场卡片 -->
+    <div class="card" id="entryCard">
+        <h2>🚗 入场登记</h2>
+        <div class="form-group">
+            <label for="entryParkingId">停车场 ID</label>
+            <input type="number" id="entryParkingId" placeholder="请输入停车场 ID，例如 1" />
+        </div>
+        <div class="form-group">
+            <label for="entryPlate">车牌号（例：粤B12345）</label>
+            <input type="text" id="entryPlate" placeholder="请输入车牌号" />
+        </div>
+        <button class="btn" id="btnEntry">确认入场</button>
+        <div id="entryMessage" class="message"></div>
+    </div>
+
+    <!-- 出场卡片 -->
+    <div class="card" id="exitCard">
+        <h2>🚪 出场并发起支付</h2>
+        <div class="form-group">
+            <label for="exitParkingId">停车场 ID</label>
+            <input type="number" id="exitParkingId" placeholder="请输入停车场 ID，例如 1" />
+        </div>
+        <div class="form-group">
+            <label for="exitPlate">车牌号</label>
+            <input type="text" id="exitPlate" placeholder="请输入车牌号" />
+        </div>
+        <button class="btn" id="btnExit">确认出场</button>
+        <div id="exitMessage" class="message"></div>
+        <div id="qrCodeContainer"></div>
+    </div>
+
+    <!-- 支付回调卡片 -->
+    <div class="card" id="callbackCard">
+        <h2>🔁 模拟微信支付回调</h2>
+        <div class="form-group">
+            <label for="orderId">预支付ID（order_id）</label>
+            <input type="text" id="orderId" placeholder="出场成功后自动填入，也可手动输入" />
+        </div>
+        <button class="btn" id="btnCallback">发起回调</button>
+        <div id="callbackMessage" class="message"></div>
+    </div>
+
+    <!-- 日志卡片 -->
+    <div class="card" id="logCard">
+        <h2>📋 操作日志</h2>
+        <div id="log"></div>
+    </div>
+</div>
+
+<script>
+    const apiBase = 'http://localhost:8081/api'; // 根据后端实际端口和路径调整
+
+    function log(msg) {
+        const logEl = document.getElementById('log');
+        const time = new Date().toLocaleTimeString();
+        logEl.textContent += `[${time}] ${msg}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // 通用 POST 请求并返回 JSON
+    async function doPost(url, payload) {
+        const bodyText = JSON.stringify(payload);
+        log(`→ POST ${url}\n  Payload: ${bodyText}`);
+        let res, text, data;
+        try {
+            res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: bodyText
+            });
+        } catch (networkErr) {
+            log(`✖ 网络错误：${networkErr.message}`);
+            throw networkErr;
+        }
+        log(`← HTTP ${res.status}`);
+        try {
+            text = await res.text();
+            log(`  Raw response: ${text}`);
+            data = JSON.parse(text);
+        } catch (parseErr) {
+            log(`✖ JSON 解析失败：${parseErr.message}`);
+            throw parseErr;
+        }
+        return data;
+    }
+
+    // 入场
+    document.getElementById('btnEntry').addEventListener('click', async () => {
+        const plate = document.getElementById('entryPlate').value.trim();
+        const parkingId = Number(document.getElementById('entryParkingId').value);
+        if (!parkingId || isNaN(parkingId)) {
+            alert('请输入有效的停车场 ID');
+            return;
+        }
+        if (!plate) {
+            alert('请输入车牌号');
+            return;
+        }
+        const payload = {
+            plate_number: plate,
+            parking_id: parkingId,
+            timestamp: new Date().toISOString()
+        };
+        document.getElementById('entryMessage').textContent = '';
+        try {
+            const data = await doPost(`${apiBase}/parking/entry`, payload);
+            if (data.code === 0) {
+                document.getElementById('entryMessage').textContent = `入场成功：${data.msg}`;
+                log(`✓ 入场成功：${data.msg}`);
+            } else {
+                document.getElementById('entryMessage').textContent = `入场失败：${data.msg}`;
+                log(`✖ 入场失败：${data.msg}`);
+            }
+        } catch (_) {
+            document.getElementById('entryMessage').textContent = '入场流程异常（详见日志）';
+            log('✖ 入场流程发生异常');
+        }
+    });
+
+    // 出场并发起支付
+    document.getElementById('btnExit').addEventListener('click', async () => {
+        const plate = document.getElementById('exitPlate').value.trim();
+        const parkingId = Number(document.getElementById('exitParkingId').value);
+        if (!parkingId || isNaN(parkingId)) {
+            alert('请输入有效的停车场 ID');
+            return;
+        }
+        if (!plate) {
+            alert('请输入车牌号');
+            return;
+        }
+        const payload = {
+            plate_number: plate,
+            parking_id: parkingId,
+            timestamp: new Date().toISOString()
+        };
+        document.getElementById('exitMessage').textContent = '';
+        document.getElementById('qrCodeContainer').innerHTML = '';
+        document.getElementById('orderId').value = '';
+        try {
+            const data = await doPost(`${apiBase}/parking/exit`, payload);
+            if (data.code === 0) {
+                const codeUrl = data.data.code_url || data.data.CodeURL || '';
+                const prepayId = data.data.prepay_id || data.data.PrepayID || '';
+                document.getElementById('exitMessage').textContent = `出场成功！`;
+                log(`✓ 出场成功，二维码链接：${codeUrl}`);
+                if (codeUrl) {
+                    document.getElementById('qrCodeContainer').innerHTML = `<img src="${codeUrl}" alt="支付二维码" />`;
+                }
+                document.getElementById('orderId').value = prepayId;
+            } else {
+                document.getElementById('exitMessage').textContent = `出场失败：${data.msg}`;
+                log(`✖ 出场失败：${data.msg}`);
+            }
+        } catch (_) {
+            document.getElementById('exitMessage').textContent = '出场流程异常（详见日志）';
+            log('✖ 出场流程发生异常');
+        }
+    });
+
+    // 模拟微信支付回调
+    document.getElementById('btnCallback').addEventListener('click', async () => {
+        const prepayId = document.getElementById('orderId').value.trim();
+        if (!prepayId) {
+            alert('请输入预支付ID');
+            return;
+        }
+        const payload = { prepay_id: prepayId };
+        document.getElementById('callbackMessage').textContent = '';
+        try {
+            const data = await doPost(`http://localhost:9090/pay/payment_notify`, payload);
+            if (data.code === 0) {
+                document.getElementById('callbackMessage').textContent = `回调成功：${data.msg}`;
+                log(`✓ 回调成功：${data.msg}`);
+            } else {
+                document.getElementById('callbackMessage').textContent = `回调失败：${data.msg}`;
+                log(`✖ 回调失败：${data.msg}`);
+            }
+        } catch (_) {
+            document.getElementById('callbackMessage').textContent = '回调流程异常（详见日志）';
+            log('✖ 回调流程发生异常');
+        }
+    });
+</script>
+</body>
+</html>

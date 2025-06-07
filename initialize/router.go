@@ -15,7 +15,8 @@ func InitRouter() *gin.Engine {
 	gin.SetMode(global.Config.System.Env)
 	Router := gin.Default()
 	Router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:8080"},
+		//AllowOrigins:     []string{"http://localhost:8080"},
+		AllowOrigins:     []string{"*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization", "Token", "Lang", "X-Requested-With"},
 		AllowCredentials: true,
@@ -36,6 +37,7 @@ func InitRouter() *gin.Engine {
 	routerGroup.InitUserRouter(publicGroup)
 	routerGroup.InitParkingRouter(publicGroup)
 	routerGroup.InitBarrierLogRouter(publicGroup)
+	routerGroup.InitPayRouter(publicGroup)
 
 	return Router
 }

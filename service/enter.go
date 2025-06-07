@@ -7,6 +7,8 @@ type ServiceGroup struct {
 	ParkingLotService
 	ParkingRecordService
 	OrderService
+	PayService
+	PayWeChatService
 }
 
 var ServiceGroupApp = new(ServiceGroup)

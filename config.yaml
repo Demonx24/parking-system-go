@@ -24,3 +24,12 @@ zap:
   max_backups: 7
   max_age: 1
   is_console_print: true
+redis:
+  address: 127.0.0.1:6379
+  password: ""
+  db: 0
+WeChat:
+  WeChatAppID     : "wx1234567890abcdef"
+  WeChatMchID     : "1234567890"
+  WeChatAPIKey    : "wlc1224"
+  WeChatNotifyURL : "https://localhost:8081/api/pay/payment_notify"

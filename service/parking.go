@@ -12,7 +12,7 @@ type ParkingService struct{}
 func (s *ParkingService) ParkingStatus(req database.ParkingRecord) (database.ParkingRecord, error) {
 	var record database.ParkingRecord
 
-	if req.ID == 0 && req.CarPlate == "" {
+	if req.ID == 0 && req.PlateNumber == "" {
 		return record, errors.New("必须提供 ID 或车牌号")
 	}
 
@@ -20,7 +20,7 @@ func (s *ParkingService) ParkingStatus(req database.ParkingRecord) (database.Par
 	if req.ID != 0 {
 		query = query.Where("id = ?", req.ID)
 	} else {
-		query = query.Where("car_plate = ?", req.CarPlate)
+		query = query.Where("car_plate = ?", req.PlateNumber)
 	}
 
 	err := query.First(&record).Error
