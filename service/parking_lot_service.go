@@ -2,10 +2,13 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"parking-system-go/global"
 	"parking-system-go/model/database"
+	"parking-system-go/utils"
+	"time"
 )
 
 type ParkingLotService struct{}
@@ -40,6 +43,30 @@ func (s *ParkingLotService) Update(lot *database.ParkingLot) error {
 
 func (s *ParkingLotService) Delete(where *database.ParkingLot) error {
 	return global.DB.Where(where).Delete(&database.ParkingLot{}).Error
+}
+
+// 查询redis中每个停车场信息，如果redis中信息不存在就存入
+func (s *ParkingLotService) GetParkingLotR(lot *database.ParkingLot) (database.ParkingLot, error) {
+	fmt.Printf("global.Redis: %#v\n", global.Redis)
+	if lot.ID == 0 && lot.Name == "" {
+		return *lot, errors.New("必须提供 ID 或停车场名称")
+	}
+	key := fmt.Sprintf("parking_lot:%d", lot.ID)
+
+	return utils.GetOrSetStruct(
+		key,
+		time.Hour,
+		func() (database.ParkingLot, error) {
+			var pl database.ParkingLot
+			if lot.ID != 0 {
+				err := global.DB.Where("id = ?", lot.ID).First(&pl).Error
+				return pl, err
+			} else {
+				err := global.DB.Where("name = ?", lot.Name).First(&pl).Error
+				return pl, err
+			}
+		},
+	)
 }
 
 // 入场

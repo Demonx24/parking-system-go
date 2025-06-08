@@ -1,10 +1,11 @@
 package initialize
 
 import (
+	"context"
 	"os"
 	"parking-system-go/global"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"go.uber.org/zap"
 )
 
@@ -20,7 +21,8 @@ func ConnectRedis() redis.Client {
 	})
 
 	// Ping Redis 服务器以检查连接是否正常
-	_, err := client.Ping().Result()
+	ctx := context.Background()
+	_, err := client.Ping(ctx).Result()
 	if err != nil {
 		global.Log.Error("Failed to connect to Redis:", zap.Error(err))
 		os.Exit(1)

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>模拟停车场管理</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 480px; margin: 20px auto; padding: 10px; background: #f9f9f9; }
+        input, button { font-size: 16px; padding: 8px; margin: 6px 0; width: 100%; box-sizing: border-box; }
+        button { cursor: pointer; }
+        #message { margin: 15px 0; padding: 10px; background: #e0f7fa; border-radius: 4px; min-height: 24px; white-space: pre-wrap; }
+        #qrcode { margin: 15px 0; }
+        #paySection { margin-top: 15px; }
+    </style>
+</head>
+<body>
+
+<h2>模拟停车场管理</h2>
+
+<label for="parkingId">停车场ID：</label>
+<input type="text" id="parkingId" placeholder="请输入停车场ID" />
+
+<label for="plateNumber">车牌号：</label>
+<input type="text" id="plateNumber" placeholder="请输入车牌号" />
+
+<button id="btnEntry">入场</button>
+<button id="btnExit">出场</button>
+
+<div id="message"></div>
+
+<div id="qrcode"></div>
+
+<div id="paySection" style="display:none;">
+    <button id="btnPaid">我已支付</button>
+</div>
+
+<!-- 引入二维码生成库 -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+    const entryApi = 'http://localhost:8081/api/parking/entry';
+    const exitApi = 'http://localhost:8081/api/parking/exit';
+    const wxMockNotifyApi = 'http://localhost:9090/pay/mock_notify';
+
+    const parkingIdInput = document.getElementById('parkingId');
+    const plateInput = document.getElementById('plateNumber');
+    const btnEntry = document.getElementById('btnEntry');
+    const btnExit = document.getElementById('btnExit');
+    const messageDiv = document.getElementById('message');
+    const qrcodeDiv = document.getElementById('qrcode');
+    const paySection = document.getElementById('paySection');
+    const btnPaid = document.getElementById('btnPaid');
+
+    let currentPrepayID = '';
+
+    function getTimestamp() {
+        return new Date().toISOString();
+    }
+
+    function clearUI() {
+        messageDiv.textContent = '';
+        qrcodeDiv.innerHTML = '';
+        paySection.style.display = 'none';
+        currentPrepayID = '';
+    }
+
+    // 入场按钮事件
+    btnEntry.onclick = async () => {
+        clearUI();
+        const parkingId = parkingIdInput.value.trim();
+        const plateNumber = plateInput.value.trim();
+        if (!parkingId) {
+            alert('请输入停车场ID');
+            return;
+        }
+        if (!plateNumber) {
+            alert('请输入车牌号');
+            return;
+        }
+
+        const body = {
+            parking_id: Number(parkingId),
+            plateNumber: plateNumber,
+            timestamp: getTimestamp()
+        };
+
+        try {
+            const res = await fetch(entryApi, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                if (data.code === 0) {
+                    messageDiv.textContent = data.msg || `欢迎${plateNumber}入场`;
+                } else {
+                    messageDiv.textContent = data.msg || '入场失败，未知原因';
+                }
+            } else {
+                messageDiv.textContent = '入场失败，HTTP状态错误';
+            }
+        } catch (err) {
+            messageDiv.textContent = '入场接口请求失败，网络或服务器异常';
+        }
+    };
+
+    // 出场按钮事件
+    btnExit.onclick = async () => {
+        clearUI();
+        const parkingId = parkingIdInput.value.trim();
+        const plateNumber = plateInput.value.trim();
+        if (!parkingId) {
+            alert('请输入停车场ID');
+            return;
+        }
+        if (!plateNumber) {
+            alert('请输入车牌号');
+            return;
+        }
+
+        const body = {
+            parking_id: Number(parkingId),
+            plateNumber: plateNumber,
+            timestamp: getTimestamp()
+        };
+
+        try {
+            const res = await fetch(exitApi, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                if (data.code === 0 && data.data) {
+                    const codeUrl = data.data.CodeURL || data.data.codeURL;
+                    const prepayId = data.data.PrepayID || data.data.prepayID;
+
+                    if (!codeUrl) {
+                        messageDiv.textContent = data.msg || '出场未返回二维码链接';
+                        return;
+                    }
+
+                    messageDiv.textContent = data.msg || '请扫码支付停车费';
+                    qrcodeDiv.innerHTML = '';
+                    new QRCode(qrcodeDiv, {
+                        text: codeUrl,
+                        width: 200,
+                        height: 200
+                    });
+                    paySection.style.display = 'block';
+                    currentPrepayID = prepayId || '';
+                } else {
+                    messageDiv.textContent = data.msg || '出场失败，车辆可能不在停车场';
+                }
+            } else {
+                messageDiv.textContent = '出场失败，HTTP状态错误';
+            }
+        } catch (err) {
+            messageDiv.textContent = '出场接口请求失败，网络或服务器异常';
+        }
+    };
+
+    // 点击“我已支付”按钮，通知后端模拟支付完成
+    btnPaid.onclick = async () => {
+        if (!currentPrepayID) {
+            alert('无支付信息');
+            return;
+        }
+        try {
+            const res = await fetch(wxMockNotifyApi, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prepay_id: currentPrepayID })
+            });
+            if (res.ok) {
+                messageDiv.textContent = '已通知微信模拟支付回调，等待服务端确认...';
+                paySection.style.display = 'none';
+                qrcodeDiv.innerHTML = '';
+            } else {
+                messageDiv.textContent = '微信模拟支付回调接口调用失败';
+            }
+        } catch (err) {
+            messageDiv.textContent = '调用微信模拟支付回调接口异常';
+        }
+    };
+</script>
+
+</body>
+</html>

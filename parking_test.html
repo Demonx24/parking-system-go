@@ -2,294 +2,253 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>停车场支付模拟演示</title>
+    <title>停车场模拟管理</title>
     <style>
-        /* 页面整体风格 */
         body {
-            background-color: #f0f2f5;
-            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
+            font-family: Arial, sans-serif;
             padding: 20px;
-        }
-        .container {
-            max-width: 700px;
+            max-width: 480px;
             margin: auto;
+            background: #f9f9f9;
         }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        /* 卡片式区域 */
-        .card {
-            background-color: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-            padding: 20px;
-        }
-        .card h2 {
-            margin-top: 0;
-            color: #444;
-        }
-        /* 表单样式 */
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
+        label {
             display: block;
-            font-size: 14px;
-            color: #555;
-            margin-bottom: 5px;
+            margin-top: 10px;
         }
-        .form-group input {
+        input, select, button {
             width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-            box-sizing: border-box;
-            transition: border-color 0.2s;
+            padding: 8px;
+            margin-top: 6px;
+            font-size: 16px;
         }
-        .form-group input:focus {
-            border-color: #409eff;
-            outline: none;
-        }
-        .btn {
-            display: inline-block;
-            background-color: #409eff;
-            color: #fff;
-            padding: 10px 20px;
-            font-size: 14px;
-            border: none;
-            border-radius: 4px;
+        button {
             cursor: pointer;
-            transition: background-color 0.2s;
         }
-        .btn:hover {
-            background-color: #66b1ff;
-        }
-        .btn:active {
-            background-color: #3a8ee6;
-        }
-        /* 日志区域 */
-        #log {
-            background-color: #f5f5f5;
-            border: 1px solid #d9d9d9;
-            border-radius: 4px;
+        #paymentArea {
+            margin-top: 20px;
             padding: 10px;
-            height: 180px;
-            overflow-y: auto;
-            font-family: Consolas, "Courier New", monospace;
-            font-size: 13px;
-            white-space: pre-wrap;
+            background: #fff;
+            border: 1px solid #ddd;
+            display: none;
+        }
+        #qrCode {
+            margin: 15px 0;
+            width: 200px;
+            height: 200px;
+            border: 1px solid #ccc;
+        }
+        #result, #entryResult, #exitResult {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        #exitInfo {
+            margin-top: 10px;
             color: #333;
         }
-        /* 支付二维码展示 */
-        #qrCodeContainer {
-            text-align: center;
-            margin-top: 15px;
-        }
-        #qrCodeContainer img {
-            max-width: 200px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        /* 提示消息样式 */
-        .message {
-            margin-top: 10px;
-            color: #409eff;
-            font-size: 14px;
+        pre {
+            background: #eee;
+            padding: 10px;
+            overflow-x: auto;
+            font-size: 12px;
+            color: #333;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>停车场支付模拟演示</h1>
 
-    <!-- 入场卡片 -->
-    <div class="card" id="entryCard">
-        <h2>🚗 入场登记</h2>
-        <div class="form-group">
-            <label for="entryParkingId">停车场 ID</label>
-            <input type="number" id="entryParkingId" placeholder="请输入停车场 ID，例如 1" />
-        </div>
-        <div class="form-group">
-            <label for="entryPlate">车牌号（例：粤B12345）</label>
-            <input type="text" id="entryPlate" placeholder="请输入车牌号" />
-        </div>
-        <button class="btn" id="btnEntry">确认入场</button>
-        <div id="entryMessage" class="message"></div>
-    </div>
+<h1>停车场入场与出场模拟</h1>
 
-    <!-- 出场卡片 -->
-    <div class="card" id="exitCard">
-        <h2>🚪 出场并发起支付</h2>
-        <div class="form-group">
-            <label for="exitParkingId">停车场 ID</label>
-            <input type="number" id="exitParkingId" placeholder="请输入停车场 ID，例如 1" />
-        </div>
-        <div class="form-group">
-            <label for="exitPlate">车牌号</label>
-            <input type="text" id="exitPlate" placeholder="请输入车牌号" />
-        </div>
-        <button class="btn" id="btnExit">确认出场</button>
-        <div id="exitMessage" class="message"></div>
-        <div id="qrCodeContainer"></div>
-    </div>
+<section id="entrySection">
+    <h2>车辆入场</h2>
+    <label for="plateNumber">车牌号（必填）</label>
+    <input type="text" id="plateNumber" placeholder="请输入车牌号" required />
 
-    <!-- 支付回调卡片 -->
-    <div class="card" id="callbackCard">
-        <h2>🔁 模拟微信支付回调</h2>
-        <div class="form-group">
-            <label for="orderId">预支付ID（order_id）</label>
-            <input type="text" id="orderId" placeholder="出场成功后自动填入，也可手动输入" />
-        </div>
-        <button class="btn" id="btnCallback">发起回调</button>
-        <div id="callbackMessage" class="message"></div>
-    </div>
+    <label for="parkingLot">停车场（必选）</label>
+    <select id="parkingLot" required>
+        <option value="" disabled selected>请选择停车场</option>
+        <option value="1001">停车场A</option>
+        <option value="1002">停车场B</option>
+        <option value="1003">停车场C</option>
+    </select>
 
-    <!-- 日志卡片 -->
-    <div class="card" id="logCard">
-        <h2>📋 操作日志</h2>
-        <div id="log"></div>
+    <button id="btnEntry">确认入场</button>
+    <div id="entryResult"></div>
+    <pre id="entryDebug"></pre>
+</section>
+
+<hr />
+
+<section id="exitSection">
+    <h2>车辆出场</h2>
+    <label for="exitPlateNumber">车牌号（必填）</label>
+    <input type="text" id="exitPlateNumber" placeholder="请输入车牌号" required />
+
+    <label for="exitParkingLot">停车场（必选）</label>
+    <select id="exitParkingLot" required>
+        <option value="" disabled selected>请选择停车场</option>
+        <option value="1001">停车场A</option>
+        <option value="1002">停车场B</option>
+        <option value="1003">停车场C</option>
+    </select>
+
+    <button id="btnExit">确认出场</button>
+
+    <div id="exitInfo"></div> <!-- 新增出场信息展示 -->
+
+    <div id="paymentArea">
+        <img id="qrCode" alt="支付二维码" />
+        <p>预支付会话ID：<span id="prepayId"></span></p>
+        <button id="btnSimulatePay">模拟支付完成</button>
+        <div id="exitResult"></div>
+        <pre id="exitDebug"></pre>
     </div>
-</div>
+</section>
 
 <script>
-    const apiBase = 'http://localhost:8081/api'; // 根据后端实际端口和路径调整
+    // 入场逻辑
+    document.getElementById('btnEntry').onclick = () => {
+        const plate = document.getElementById('plateNumber').value.trim();
+        const lot = document.getElementById('parkingLot').value;
+        const entryResult = document.getElementById('entryResult');
+        const entryDebug = document.getElementById('entryDebug');
 
-    function log(msg) {
-        const logEl = document.getElementById('log');
-        const time = new Date().toLocaleTimeString();
-        logEl.textContent += `[${time}] ${msg}\n`;
-        logEl.scrollTop = logEl.scrollHeight;
-    }
+        entryResult.textContent = '';
+        entryDebug.textContent = '';
 
-    // 通用 POST 请求并返回 JSON
-    async function doPost(url, payload) {
-        const bodyText = JSON.stringify(payload);
-        log(`→ POST ${url}\n  Payload: ${bodyText}`);
-        let res, text, data;
-        try {
-            res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: bodyText
-            });
-        } catch (networkErr) {
-            log(`✖ 网络错误：${networkErr.message}`);
-            throw networkErr;
-        }
-        log(`← HTTP ${res.status}`);
-        try {
-            text = await res.text();
-            log(`  Raw response: ${text}`);
-            data = JSON.parse(text);
-        } catch (parseErr) {
-            log(`✖ JSON 解析失败：${parseErr.message}`);
-            throw parseErr;
-        }
-        return data;
-    }
-
-    // 入场
-    document.getElementById('btnEntry').addEventListener('click', async () => {
-        const plate = document.getElementById('entryPlate').value.trim();
-        const parkingId = Number(document.getElementById('entryParkingId').value);
-        if (!parkingId || isNaN(parkingId)) {
-            alert('请输入有效的停车场 ID');
-            return;
-        }
         if (!plate) {
-            alert('请输入车牌号');
+            entryResult.style.color = 'red';
+            entryResult.textContent = '请填写车牌号';
             return;
         }
-        const payload = {
-            plate_number: plate,
-            parking_id: parkingId,
-            timestamp: new Date().toISOString()
-        };
-        document.getElementById('entryMessage').textContent = '';
-        try {
-            const data = await doPost(`${apiBase}/parking/entry`, payload);
-            if (data.code === 0) {
-                document.getElementById('entryMessage').textContent = `入场成功：${data.msg}`;
-                log(`✓ 入场成功：${data.msg}`);
-            } else {
-                document.getElementById('entryMessage').textContent = `入场失败：${data.msg}`;
-                log(`✖ 入场失败：${data.msg}`);
-            }
-        } catch (_) {
-            document.getElementById('entryMessage').textContent = '入场流程异常（详见日志）';
-            log('✖ 入场流程发生异常');
+        if (!lot) {
+            entryResult.style.color = 'red';
+            entryResult.textContent = '请选择停车场';
+            return;
         }
-    });
 
-    // 出场并发起支付
-    document.getElementById('btnExit').addEventListener('click', async () => {
-        const plate = document.getElementById('exitPlate').value.trim();
-        const parkingId = Number(document.getElementById('exitParkingId').value);
-        if (!parkingId || isNaN(parkingId)) {
-            alert('请输入有效的停车场 ID');
-            return;
-        }
-        if (!plate) {
-            alert('请输入车牌号');
-            return;
-        }
-        const payload = {
-            plate_number: plate,
-            parking_id: parkingId,
-            timestamp: new Date().toISOString()
-        };
-        document.getElementById('exitMessage').textContent = '';
-        document.getElementById('qrCodeContainer').innerHTML = '';
-        document.getElementById('orderId').value = '';
-        try {
-            const data = await doPost(`${apiBase}/parking/exit`, payload);
-            if (data.code === 0) {
-                const codeUrl = data.data.code_url || data.data.CodeURL || '';
-                const prepayId = data.data.prepay_id || data.data.PrepayID || '';
-                document.getElementById('exitMessage').textContent = `出场成功！`;
-                log(`✓ 出场成功，二维码链接：${codeUrl}`);
-                if (codeUrl) {
-                    document.getElementById('qrCodeContainer').innerHTML = `<img src="${codeUrl}" alt="支付二维码" />`;
+        entryResult.style.color = 'black';
+        entryResult.textContent = '提交入场请求中...';
+
+        fetch('http://localhost:8081/api/parking/entry', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ plate_number: plate, parking_id: Number(lot) })
+        })
+            .then(res => res.json())
+            .then(data => {
+                entryDebug.textContent = JSON.stringify(data, null, 2);
+                if (data.success) {
+                    entryResult.style.color = 'green';
+                    entryResult.textContent = '入场成功！记录ID：' + data.record_id;
+                } else {
+                    entryResult.style.color = 'red';
+                    entryResult.textContent = '入场失败：' + (data.message || '未知错误');
                 }
-                document.getElementById('orderId').value = prepayId;
-            } else {
-                document.getElementById('exitMessage').textContent = `出场失败：${data.msg}`;
-                log(`✖ 出场失败：${data.msg}`);
-            }
-        } catch (_) {
-            document.getElementById('exitMessage').textContent = '出场流程异常（详见日志）';
-            log('✖ 出场流程发生异常');
-        }
-    });
+            })
+            .catch(err => {
+                entryResult.style.color = 'red';
+                entryResult.textContent = '请求异常：' + err.message;
+            });
+    };
 
-    // 模拟微信支付回调
-    document.getElementById('btnCallback').addEventListener('click', async () => {
-        const prepayId = document.getElementById('orderId').value.trim();
-        if (!prepayId) {
-            alert('请输入预支付ID');
+    // 出场逻辑
+    document.getElementById('btnExit').onclick = async () => {
+        const plate = document.getElementById('exitPlateNumber').value.trim();
+        const lot = document.getElementById('exitParkingLot').value;
+        const exitResult = document.getElementById('exitResult');
+        const exitDebug = document.getElementById('exitDebug');
+        const qrCode = document.getElementById('qrCode');
+        const prepayIdSpan = document.getElementById('prepayId');
+        const paymentArea = document.getElementById('paymentArea');
+        const btnExit = document.getElementById('btnExit');
+        const exitInfo = document.getElementById('exitInfo');
+
+        exitResult.textContent = '';
+        exitDebug.textContent = '';
+        exitInfo.textContent = '';
+        paymentArea.style.display = 'none';
+
+        if (!plate) {
+            exitResult.style.color = 'red';
+            exitResult.textContent = '请填写车牌号';
             return;
         }
-        const payload = { prepay_id: prepayId };
-        document.getElementById('callbackMessage').textContent = '';
-        try {
-            const data = await doPost(`http://localhost:9090/pay/payment_notify`, payload);
-            if (data.code === 0) {
-                document.getElementById('callbackMessage').textContent = `回调成功：${data.msg}`;
-                log(`✓ 回调成功：${data.msg}`);
-            } else {
-                document.getElementById('callbackMessage').textContent = `回调失败：${data.msg}`;
-                log(`✖ 回调失败：${data.msg}`);
-            }
-        } catch (_) {
-            document.getElementById('callbackMessage').textContent = '回调流程异常（详见日志）';
-            log('✖ 回调流程发生异常');
+        if (!lot) {
+            exitResult.style.color = 'red';
+            exitResult.textContent = '请选择停车场';
+            return;
         }
-    });
+
+        btnExit.disabled = true;
+        btnExit.textContent = '请求中...';
+        exitResult.style.color = 'black';
+        exitResult.textContent = '请求出场接口中...';
+
+        try {
+            const res = await fetch('http://localhost:8081/api/parking/exit', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ plate_number: plate, parking_lot_id: lot })
+            });
+
+            const data = await res.json();
+            exitDebug.textContent = JSON.stringify(data, null, 2);
+
+            if (!data || !data.prepay_id || !data.qr_code_url) {
+                exitResult.style.color = 'red';
+                exitResult.textContent = data.message || '出场接口返回数据不完整';
+                return;
+            }
+
+            // 显示停车时长和应付金额（请根据接口返回字段自行调整）
+            exitInfo.style.color = '#333';
+            exitInfo.innerHTML = `
+                停车时长：<strong>${data.parking_duration || '未知'}</strong><br/>
+                应付金额：<strong>${data.amount_due != null ? data.amount_due + ' 元' : '未知'}</strong>
+            `;
+
+            qrCode.src = data.qr_code_url;
+            prepayIdSpan.textContent = data.prepay_id;
+            paymentArea.style.display = 'block';
+            exitResult.textContent = '';
+        } catch (err) {
+            exitResult.style.color = 'red';
+            exitResult.textContent = '请求异常：' + err.message;
+        } finally {
+            btnExit.disabled = false;
+            btnExit.textContent = '确认出场';
+        }
+    };
+
+    // 模拟支付逻辑
+    document.getElementById('btnSimulatePay').onclick = () => {
+        const prepayId = document.getElementById('prepayId').textContent;
+        const exitResult = document.getElementById('exitResult');
+
+        exitResult.style.color = 'black';
+        exitResult.textContent = '正在模拟支付...';
+
+        fetch('http://localhost:9090/pay/mock_notify', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ prepay_id: prepayId })
+        })
+            .then(res => {
+                if (res.ok) return res.text().then(() => '模拟支付成功');
+                else throw new Error('模拟支付失败，状态码：' + res.status);
+            })
+            .then(msg => {
+                exitResult.style.color = 'green';
+                exitResult.textContent = msg;
+            })
+            .catch(err => {
+                exitResult.style.color = 'red';
+                exitResult.textContent = err.message || '模拟支付请求出错';
+            });
+    };
 </script>
+
 </body>
 </html>

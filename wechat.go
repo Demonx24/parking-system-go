@@ -83,11 +83,14 @@ func generatePrepayID() string {
 	randomStr := fmt.Sprintf("%010d", time.Now().UnixNano()%1e10)
 	return "wx" + timestamp + randomStr
 }
+
+var prepayID = generatePrepayID()
+
 func main() {
 	apiKey := "wlc1224"
 	appID := "wx1234567890abcdef"
 	mchID := "1234567890"
-	notifyURL := "http://localhost:9090/api/pay/payment_notify"
+	notifyURL := "http://localhost:8081/api/pay/payment_notify"
 
 	r := gin.Default()
 
@@ -118,7 +121,6 @@ func main() {
 
 		nonceStr := getNonceStr()
 
-		prepayID := generatePrepayID()
 		codeURL := "http://swwuam7b1.hn-bkt.clouddn.com/pay.jpg?e=1749205770&token=xWO3ioDnx_B5AhAsQBWwcFNAoqbvEBezEUSIJOea:FJ1GcpLXotconZUNT23YBKRMakw="
 
 		respParams := map[string]string{
@@ -126,24 +128,24 @@ func main() {
 			"mch_id":      mchID,
 			"nonce_str":   nonceStr,
 			"prepay_id":   prepayID,
-			"result_code": "SUCCESS",
+			"result_code": "failure",
 		}
 		respSign := generateSign(respParams, apiKey)
 
 		c.XML(http.StatusOK, UnifiedOrderResponse{
-			ReturnCode: "SUCCESS",
+			ReturnCode: "failure",
 			ReturnMsg:  "OK",
 			AppID:      appID,
 			MchID:      mchID,
 			NonceStr:   nonceStr,
 			Sign:       respSign,
-			ResultCode: "SUCCESS",
+			ResultCode: "failure",
 			PrepayID:   prepayID,
 			CodeURL:    codeURL,
 		})
 
 		go func() {
-			time.Sleep(5 * time.Second)
+			time.Sleep(300 * time.Second)
 
 			notify := PayNotifyRequest{
 				AppID:         appID,
@@ -153,7 +155,7 @@ func main() {
 				ResultCode:    "SUCCESS",
 				ReturnCode:    "SUCCESS",
 				TotalFee:      req.TotalFee,
-				TransactionID: "wx20250606000000000000000000000000",
+				TransactionID: prepayID,
 				TimeEnd:       time.Now().Format("20060102150405"),
 			}
 
@@ -181,6 +183,54 @@ func main() {
 			body, _ := io.ReadAll(resp.Body)
 			fmt.Println("商户响应:", string(body))
 		}()
+	})
+	r.POST("/pay/mock_notify", func(c *gin.Context) {
+		var req struct {
+			OutTradeNo string `json:"out_trade_no"`
+			TotalFee   int    `json:"total_fee"`
+			PrepayID   string `json:"prepay_id"`
+		}
+		if err := c.BindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误"})
+			return
+		}
+
+		notify := PayNotifyRequest{
+			AppID:         appID,
+			MchID:         mchID,
+			NonceStr:      getNonceStr(),
+			OutTradeNo:    req.OutTradeNo,
+			ResultCode:    "failure",
+			ReturnCode:    "failure",
+			TotalFee:      req.TotalFee,
+			TransactionID: req.PrepayID,
+			TimeEnd:       time.Now().Format("20060102150405"),
+		}
+
+		notifyParams := map[string]string{
+			"return_code":    notify.ReturnCode,
+			"return_msg":     notify.ReturnMsg,
+			"appid":          notify.AppID,
+			"mch_id":         notify.MchID,
+			"nonce_str":      notify.NonceStr,
+			"out_trade_no":   notify.OutTradeNo,
+			"result_code":    notify.ResultCode,
+			"total_fee":      fmt.Sprintf("%d", notify.TotalFee),
+			"transaction_id": notify.TransactionID,
+			"time_end":       notify.TimeEnd,
+		}
+		notify.Sign = generateSign(notifyParams, apiKey)
+
+		xmlData, _ := xml.Marshal(notify)
+		resp, err := http.Post(notifyURL, "text/xml", bytes.NewReader(xmlData))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "回调失败"})
+			return
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+
+		c.JSON(http.StatusOK, gin.H{"msg": "回调成功", "response": string(body)})
 	})
 
 	// 接收支付回调接口（注意路径和真实业务统一）

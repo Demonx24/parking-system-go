@@ -113,16 +113,15 @@ func (p *PayWeChatApi) CreatePayment(c *gin.Context) {
 // 支付回调接口，微信支付完成后调用
 
 func (p *PayWeChatApi) PaymentNotify(c *gin.Context) {
-	body, err := ioutil.ReadAll(c.Request.Body)
+	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
 		c.String(http.StatusBadRequest, "fail")
 		return
 	}
 
-	// 先把 XML 解析成 map[string]string
-	params := make(map[string]string)
-	if err := xml.Unmarshal(body, (*MapXML)(&params)); err != nil {
-		c.String(http.StatusBadRequest, "fail")
+	params := MapXML{}
+	if err := xml.Unmarshal(body, &params); err != nil {
+		c.String(http.StatusBadRequest, "fail: "+err.Error())
 		return
 	}
 
@@ -159,7 +158,6 @@ func (p *PayWeChatApi) PaymentNotify(c *gin.Context) {
 		}
 		if order.Status == 0 {
 			// 修改订单为已支付
-			order.Status = 1
 			payService.MockPayment(order.OrderID)
 
 			// 查回原始的 parking record

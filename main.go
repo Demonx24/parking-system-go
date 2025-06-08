@@ -14,6 +14,7 @@ func main() {
 	global.DB = initialize.InitGorm()
 
 	global.Log = core.InitLogger()
+	global.Redis = initialize.ConnectRedis()
 	global.WeChat = initialize.InitWeChat()
 	core.RunServer()
 	r := gin.New()

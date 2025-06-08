@@ -21,7 +21,7 @@ func (p *ParkingApi) Entry(c *gin.Context) {
 		response.FailWithMessage(err.Error(), c)
 		return
 	}
-	inParking, err := barrierLogService.IsCarInParking("粤B12345")
+	inParking, err := barrierLogService.IsCarInParking(req.PlateNumber)
 	if err != nil {
 		response.FailWithMessage("判断车辆是否在场失败", c)
 		return
@@ -32,6 +32,8 @@ func (p *ParkingApi) Entry(c *gin.Context) {
 	}
 
 	req.LaneType = "entry"
+	timestamp := time.Now()
+	req.Timestamp = timestamp
 	//将抬杆信息保存
 	barrierLog, err := barrierLogService.Create(req)
 	if err != nil {
@@ -86,6 +88,7 @@ func (p *ParkingApi) Exit(c *gin.Context) {
 	}
 	// 保存出场抬杆记录
 	req.LaneType = "exit"
+	req.Timestamp = time.Now()
 	_, err = barrierLogService.Create(req)
 	if err != nil {
 		global.Log.Error("保存出场抬杆记录失败", zap.Error(err))
@@ -95,7 +98,7 @@ func (p *ParkingApi) Exit(c *gin.Context) {
 
 	// 更新出场时间
 	parkingRecord.ExitTime = &req.Timestamp
-	parkingRecord.Status = 1 // 已出场
+	parkingRecord.Status = 0 // 已出场
 	//算停车费用
 	ps, err := buildParkingStatus(parkingRecord)
 	if err != nil {
@@ -169,6 +172,7 @@ func (p *ParkingApi) GetParkingStatus(c *gin.Context) {
 
 // 抽离计算停车状态和费用逻辑
 func buildParkingStatus(parking database.ParkingRecord) (response.ParkingStatus, error) {
+
 	ps := response.ParkingStatus{
 		CarPlate:  parking.PlateNumber,
 		EntryTime: parking.EntryTime,
@@ -196,4 +200,21 @@ func buildParkingStatus(parking database.ParkingRecord) (response.ParkingStatus,
 	ps.TotalFee = math.Round((lot.PricePerHour*minutes/60)*factor) / factor
 
 	return ps, nil
+}
+
+// 查询所有停车场信息
+func (p *ParkingApi) GetParkingLotR(c *gin.Context) {
+	var req database.ParkingLot
+	if err := c.ShouldBindJSON(&req); err != nil {
+		global.Log.Error("查询参数错误", zap.Error(err))
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	req, err := parkinglotService.GetParkingLotR(&req)
+	if err != nil {
+		global.Log.Error("查询信息失败", zap.Error(err))
+		response.FailWithMessage(err.Error(), c)
+		return
+	}
+	response.OkWithData(req, c)
 }
